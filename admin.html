@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم NOVASTYLE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #0a0a0a; --surface: #1a1a1a; --gold: #D4AF37; --text: #fff; --gray: #aaa; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: 'Cairo', sans-serif; background: var(--bg); color: var(--text); padding: 30px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { text-align: center; color: var(--gold); margin-bottom: 30px; }
+        .section { background: var(--surface); border-radius: 16px; padding: 25px; margin-bottom: 25px; }
+        .section h2 { margin-bottom: 20px; color: var(--gold); }
+        input, textarea { width: 100%; padding: 12px; margin-bottom: 12px; background: #000; border: 1px solid #333; border-radius: 8px; color: #fff; font-family: 'Cairo', sans-serif; }
+        button { background: var(--gold); color: #000; border: none; padding: 10px 18px; border-radius: 25px; font-weight: 700; cursor: pointer; margin: 3px; font-family: 'Cairo', sans-serif; }
+        .btn-del { background: #e74c3c; color: #fff; }
+        .product-admin-item { background: #000; padding: 12px; border-radius: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .login-screen { display: flex; align-items: center; justify-content: center; height: 100vh; flex-direction: column; }
+        .login-screen input { max-width: 280px; }
+        .status { padding: 12px; border-radius: 8px; margin-top: 10px; text-align: center; display: none; }
+        .status.ok { background: #064e3b; color: #6ee7b7; display: block; }
+        .status.err { background: #7f1d1d; color: #fca5a5; display: block; }
+    </style>
+</head>
+<body>
+    <div id="loginScreen" class="login-screen">
+        <h1>🔐 NOVASTYLE CONTROL</h1>
+        <input type="password" id="passwordInput" placeholder="كلمة المرور">
+        <button onclick="login()">دخول</button>
+    </div>
+
+    <div id="adminPanel" style="display:none;">
+        <div class="container">
+            <h1>لوحة التحكم</h1>
+            <button onclick="logout()" style="float:left; background:#444; color:#fff;">تسجيل خروج</button>
+            <div style="clear:both;"></div>
+
+            <div class="section">
+                <h2>⚙️ إعدادات المتجر</h2>
+                <input id="setStoreName" placeholder="اسم المتجر">
+                <input id="setWhatsapp" placeholder="رقم الواتساب">
+                <input id="setHeroDesc" placeholder="وصف المتجر">
+                <label style="color:var(--gray);">اللون</label>
+                <input type="color" id="setColor">
+                <button onclick="saveSettings()">💾 حفظ الإعدادات</button>
+            </div>
+
+            <div class="section">
+                <h2>➕ منتج جديد</h2>
+                <input id="prodName" placeholder="اسم المنتج">
+                <input id="prodCategory" placeholder="الفئة">
+                <input id="prodPrice" type="number" placeholder="السعر">
+                <input id="prodOldPrice" type="number" placeholder="السعر قبل الخصم">
+                <input id="prodImage" placeholder="رابط الصورة">
+                <input type="file" id="imageFile" accept="image/*" onchange="uploadImage()" style="padding:8px;">
+                <button onclick="addProduct()">➕ إضافة وتحديث المتجر</button>
+            </div>
+
+            <div class="section">
+                <h2>📦 المنتجات</h2>
+                <div id="adminProductsList"></div>
+                <button onclick="deleteAllAndUpdate()" style="background:#e74c3; color:#fff; margin-top:10px;">🗑 حذف الكل</button>
+            </div>
+
+            <div class="section">
+                <h2>📁 نسخ احتياطي</h2>
+                <button onclick="downloadJSON()">📥 تحميل data.json</button>
+                <button onclick="syncNow()">🔄 مزامنة الآن</button>
+                <div id="statusMsg" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_PASS = 'admin123';
+        let data = {
+            settings: { storeName: "NOVASTYLE", whatsapp: "967735846986", heroDescription: "ساعات، عطور، إكسسوارات، نظارات وإلكترونيات", primaryColor: "#D4AF37" },
+            products: []
+        };
+
+        function login() {
+            if (document.getElementById('passwordInput').value === ADMIN_PASS) {
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadAll();
+            } else alert('كلمة مرور خاطئة');
+        }
+        function logout() {
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('adminPanel').style.display = 'none';
+        }
+
+        function loadAll() {
+            const d = localStorage.getItem('novastyle_admin_data');
+            if (d) data = JSON.parse(d);
+            document.getElementById('setStoreName').value = data.settings.storeName;
+            document.getElementById('setWhatsapp').value = data.settings.whatsapp;
+            document.getElementById('setHeroDesc').value = data.settings.heroDescription;
+            document.getElementById('setColor').value = data.settings.primaryColor;
+            renderList();
+        }
+
+        function saveAll() { localStorage.setItem('novastyle_admin_data', JSON.stringify(data)); }
+
+        function saveSettings() {
+            data.settings.storeName = document.getElementById('setStoreName').value;
+            data.settings.whatsapp = document.getElementById('setWhatsapp').value;
+            data.settings.heroDescription = document.getElementById('setHeroDesc').value;
+            data.settings.primaryColor = document.getElementById('setColor').value;
+            saveAll(); syncToStore();
+        }
+
+        function uploadImage() {
+            const f = document.getElementById('imageFile').files[0];
+            if (!f) return;
+            const r = new FileReader();
+            r.onload = e => document.getElementById('prodImage').value = e.target.result;
+            r.readAsDataURL(f);
+        }
+
+        function addProduct() {
+            const n = document.getElementById('prodName').value.trim();
+            const c = document.getElementById('prodCategory').value.trim();
+            const p = +document.getElementById('prodPrice').value;
+            const o = +document.getElementById('prodOldPrice').value || null;
+            const img = document.getElementById('prodImage').value.trim();
+            if (!n || !c || !p || !img) return alert('املأ جميع الحقول');
+            data.products.push({ id: Date.now(), name: n, category: c, price: p, oldPrice: o, image: img });
+            saveAll(); renderList();
+            ['prodName','prodCategory','prodPrice','prodOldPrice','prodImage'].forEach(x => document.getElementById(x).value = '');
+            document.getElementById('imageFile').value = '';
+            syncToStore();
+        }
+
+        function deleteProduct(id) {
+            if (!confirm('متأكد؟')) return;
+            data.products = data.products.filter(x => x.id !== id);
+            saveAll(); renderList(); syncToStore();
+        }
+
+        function deleteAllAndUpdate() {
+            if (!confirm('حذف جميع المنتجات؟')) return;
+            data.products = []; saveAll(); renderList(); syncToStore();
+        }
+
+        function renderList() {
+            const l = document.getElementById('adminProductsList');
+            if (!data.products.length) { l.innerHTML = '<p style="color:var(--gray); text-align:center;">لا توجد منتجات</p>'; return; }
+            l.innerHTML = data.products.map(p => `
+                <div class="product-admin-item">
+                    <span>${p.name} - ${p.price} ر.س</span>
+                    <button class="btn-del" onclick="deleteProduct(${p.id})">حذف</button>
+                </div>`).join('');
+        }
+
+        function setStatus(msg, cls) {
+            const s = document.getElementById('statusMsg');
+            s.textContent = msg; s.className = 'status ' + cls;
+        }
+
+        function syncToStore() {
+            localStorage.setItem('novastyle_live_data', JSON.stringify(data));
+            setStatus('✅ تم تحديث المتجر!', 'ok');
+        }
+
+        function syncNow() { syncToStore(); }
+
+        function downloadJSON() {
+            const b = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = 'data.json';
+            a.click();
+        }
+    </script>
+</body>
+</html>
